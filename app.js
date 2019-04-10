@@ -97,9 +97,31 @@ const getChats = async () => {
   return chats;
 };
 
-const getContacts = namePattern => {};
-const addContact = (phoneNumber, name) => {};
-const removeContact = phoneNumber => {};
+const getContacts = async str => {
+  const contacts = await redis.hscan(
+    `contacts:name:${userPhoneNumber}`,
+    0,
+    "match",
+    `*${str}*`
+  );
+  return contacts;
+};
+
+const addContact = async (phoneNumber, name) => {
+  //phoneNumber taraf ra darim. ham name ra darim. bayad add konim.
+  await redis.hset(`contacts:number:${userPhoneNumber}`, phoneNumber, name);
+  await redis.hset(`contacts:name:${userPhoneNumber}`, name, phoneNumber);
+};
+
+const removeContact = async phoneNumber => {
+  // avval name e phoneNumber ra yeja save mikonim. bad az har do ta type hazf mikonim satre marbutaro :|
+  const name = await redis.hget(
+    `contacts:number:${userPhoneNumber}`,
+    phoneNumber
+  );
+  await redis.hdel(`contacts:number:${userPhoneNumber}`, phoneNumber);
+  await redis.hdel(`contacts:name:${userPhoneNumber}`, name);
+};
 
 module.exports = {
   login,
@@ -108,5 +130,8 @@ module.exports = {
   getMessages,
   getChats,
   createPrivate,
-  createGroup
+  createGroup,
+  addContact,
+  getContacts,
+  removeContact
 };
