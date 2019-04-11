@@ -4,18 +4,12 @@ const bluebird = require("bluebird");
 
 const redis = new Redis();
 
-let userPhoneNumber = null;
-
-const login = phoneNumber => {
-  userPhoneNumber = phoneNumber;
-};
-
-const sendMessage = async (chatId, text, isFromApp) => {
+const sendMessage = async (sender, chatId, text) => {
   const messageId = uuid();
   const now = Date.now();
 
   const message = {
-    sender: isFromApp ? null : userPhoneNumber,
+    sender,
     chatId,
     date: now,
     id: messageId,
@@ -35,19 +29,22 @@ const sendMessage = async (chatId, text, isFromApp) => {
   });
 };
 
-const join = async chatId => {
+const join = async (userPhoneNumber, chatId) => {
   // ozve gorohesh konim
   await redis.sadd(`members:${chatId}`, userPhoneNumber);
 
   // begim folani join shod
-  await sendMessage(chatId, `${userPhoneNumber} joined group`, true);
+  await sendMessage(null, chatId, `${userPhoneNumber} joined group`);
 };
 
-const createGroup = async (phoneNumbers, groupName) => {
+const createGroup = async (userPhoneNumber, groupName, phoneNumbers) => {
   const chatId = uuid();
 
   // aval ye goroh ba in nam besazim baraye in chatId
   await redis.set(`chat:info:${chatId}`, `gp:${groupName}`);
+
+  // khodesh ro add kon be group
+  await redis.sadd(`members:${chatId}`, userPhoneNumber);
 
   // hameye adama ro add konim be group
   await bluebird.map(phoneNumbers, async phoneNumber => {
@@ -55,10 +52,10 @@ const createGroup = async (phoneNumbers, groupName) => {
   });
 
   // begim goroh sakhte shod
-  await sendMessage(chatId, `group created by ${userPhoneNumber}`, true);
+  await sendMessage(null, chatId, `group created by ${userPhoneNumber}`);
 };
 
-const createPrivate = async phoneNumber => {
+const createPrivate = async (userPhoneNumber, phoneNumber) => {
   const chatId = uuid();
 
   // baraye in chatId ye obj misazim k bege esmesh chie
@@ -71,10 +68,10 @@ const createPrivate = async phoneNumber => {
   await redis.sadd(`members:${chatId}`, phoneNumber, userPhoneNumber);
 
   // payam midim k folani chat ro shoro kard
-  await sendMessage(chatId, `${userPhoneNumber} started chat`, true);
+  await sendMessage(null, chatId, `${userPhoneNumber} started chat`);
 };
 
-const getMessages = async chatId => {
+const getMessages = async (userPhoneNumber, chatId) => {
   const messageIds = await redis.zrevrange(`chat:msgs:${chatId}`, 0, -1);
   const messages = await bluebird.map(messageIds, async messageId => {
     return JSON.parse(await redis.get(`msg:${messageId}`));
@@ -85,7 +82,7 @@ const getMessages = async chatId => {
   return messages;
 };
 
-const getChats = async () => {
+const getChats = async userPhoneNumber => {
   const chatIds = await redis.zrevrange(`user:chats:${userPhoneNumber}`, 0, -1);
   const chats = await bluebird.map(chatIds, async chatId => {
     const chatName = await redis.get(`chat:info:${chatId}`);
@@ -97,7 +94,7 @@ const getChats = async () => {
   return chats;
 };
 
-const getContacts = async str => {
+const getContacts = async (userPhoneNumber, str) => {
   const contacts = await redis.hscan(
     `contacts:name:${userPhoneNumber}`,
     0,
@@ -107,13 +104,13 @@ const getContacts = async str => {
   return contacts;
 };
 
-const addContact = async (phoneNumber, name) => {
+const addContact = async (userPhoneNumber, phoneNumber, name) => {
   //phoneNumber taraf ra darim. ham name ra darim. bayad add konim.
   await redis.hset(`contacts:number:${userPhoneNumber}`, phoneNumber, name);
   await redis.hset(`contacts:name:${userPhoneNumber}`, name, phoneNumber);
 };
 
-const removeContact = async phoneNumber => {
+const removeContact = async (userPhoneNumber, phoneNumber) => {
   // avval name e phoneNumber ra yeja save mikonim. bad az har do ta type hazf mikonim satre marbutaro :|
   const name = await redis.hget(
     `contacts:number:${userPhoneNumber}`,
@@ -124,7 +121,6 @@ const removeContact = async phoneNumber => {
 };
 
 module.exports = {
-  login,
   join,
   sendMessage,
   getMessages,
