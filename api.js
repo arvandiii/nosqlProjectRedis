@@ -17,16 +17,18 @@ const sendMessage = async (sender, chatId, text) => {
     text
   };
 
-  // check konim k chat vojod dashte bashe
-  const exists = await redis.exists(`chat:msgs:${chatId}`);
-  if (!exists) {
-    return error("chat is not valid");
-  }
+  if (sender) {
+    // check konim k chat vojod dashte bashe
+    const exists = await redis.exists(`chat:msgs:${chatId}`);
+    if (!exists) {
+      return error("chat is not valid");
+    }
 
-  // check konim k aya taraf ozve chat hast ya na
-  const isMember = await redis.sismember(`members:${chatId}`, sender);
-  if (!isMember) {
-    return error("you are not allowed to send message to this chat");
+    // check konim k aya taraf ozve chat hast ya na
+    const isMember = await redis.sismember(`members:${chatId}`, sender);
+    if (!isMember) {
+      return error("you are not allowed to send message to this chat");
+    }
   }
 
   // ye message sakhtim
@@ -40,14 +42,24 @@ const sendMessage = async (sender, chatId, text) => {
   await bluebird.map(members, async member => {
     await redis.zadd(`user:chats:${member}`, now, chatId);
   });
+
+  return "message sent";
 };
 
 const join = async (userPhoneNumber, chatId) => {
+  // check konim k chat vojod dashte bashe
+  const exists = await redis.exists(`chat:msgs:${chatId}`);
+  if (!exists) {
+    return error("chat is not valid");
+  }
+
   // ozve gorohesh konim
   await redis.sadd(`members:${chatId}`, userPhoneNumber);
 
   // begim folani join shod
   await sendMessage(null, chatId, `${userPhoneNumber} joined group`);
+
+  return "group is joined";
 };
 
 const createGroup = async (userPhoneNumber, groupName, phoneNumbers) => {
@@ -66,6 +78,8 @@ const createGroup = async (userPhoneNumber, groupName, phoneNumbers) => {
 
   // begim goroh sakhte shod
   await sendMessage(null, chatId, `group created by ${userPhoneNumber}`);
+
+  return "group created";
 };
 
 const createPrivate = async (userPhoneNumber, phoneNumber) => {
@@ -82,29 +96,55 @@ const createPrivate = async (userPhoneNumber, phoneNumber) => {
 
   // payam midim k folani chat ro shoro kard
   await sendMessage(null, chatId, `${userPhoneNumber} started chat`);
+
+  return "private chat started";
 };
 
 const getMessages = async (userPhoneNumber, chatId) => {
+  // check konim k chat vojod dashte bashe
+  const exists = await redis.exists(`chat:msgs:${chatId}`);
+  if (!exists) {
+    return error("chat is not valid");
+  }
+
+  // check konim k aya taraf ozve chat hast ya na
+  const isMember = await redis.sismember(`members:${chatId}`, sender);
+  if (!isMember) {
+    return error("you are not allowed to send message to this chat");
+  }
+
   const messageIds = await redis.zrevrange(`chat:msgs:${chatId}`, 0, -1);
+
+  const lastSeen = await redis.get(`lastSeen:${userPhoneNumber}`);
+
   const messages = await bluebird.map(messageIds, async messageId => {
-    return JSON.parse(await redis.get(`msg:${messageId}`));
+    const msg = JSON.parse(await redis.get(`msg:${messageId}`));
+    Object.assign({}, msg, { hasSeen: lastSeen ? msg.date < lastSeen : false });
+    return msg;
   });
 
   // bayad last seen ro avaz konim
+  await redis.set(`lastSeen:${userPhoneNumber}`, Date.now());
 
-  return messages;
+  return JSON.stringify(messages, null, 4);
 };
 
 const getChats = async userPhoneNumber => {
   const chatIds = await redis.zrevrange(`user:chats:${userPhoneNumber}`, 0, -1);
   const chats = await bluebird.map(chatIds, async chatId => {
     const chatName = await redis.get(`chat:info:${chatId}`);
+    const lastMessageId = await redis.zrevrange(`chat:msgs:${chatId}`, 0, 1);
+    const lastMessage = await JSON.parse(
+      await redis.get(`msg:${lastMessageId}`)
+    );
     return {
       chatName,
-      chatId
+      chatId,
+      lastMessage
     };
   });
-  return chats;
+  console.log("inja", chatIds, chats);
+  return JSON.stringify(chats, null, 4);
 };
 
 const getContacts = async (userPhoneNumber, str) => {
@@ -114,16 +154,23 @@ const getContacts = async (userPhoneNumber, str) => {
     "match",
     `*${str}*`
   );
-  return contacts;
+  return JSON.stringify(contacts, null, 4);
 };
 
 const addContact = async (userPhoneNumber, phoneNumber, name) => {
   //phoneNumber taraf ra darim. ham name ra darim. bayad add konim.
   await redis.hset(`contacts:number:${userPhoneNumber}`, phoneNumber, name);
   await redis.hset(`contacts:name:${userPhoneNumber}`, name, phoneNumber);
+
+  return "contact added";
 };
 
 const removeContact = async (userPhoneNumber, phoneNumber) => {
+  const exists = await redis.exists(`contacts:number:${userPhoneNumber}`);
+  if (!exists) {
+    return error("contact is not valid");
+  }
+
   // avval name e phoneNumber ra yeja save mikonim. bad az har do ta type hazf mikonim satre marbutaro :|
   const name = await redis.hget(
     `contacts:number:${userPhoneNumber}`,
@@ -131,6 +178,7 @@ const removeContact = async (userPhoneNumber, phoneNumber) => {
   );
   await redis.hdel(`contacts:number:${userPhoneNumber}`, phoneNumber);
   await redis.hdel(`contacts:name:${userPhoneNumber}`, name);
+  return "contact removed";
 };
 
 module.exports = {
