@@ -119,7 +119,7 @@ const getMessages = async (userPhoneNumber, chatId) => {
 
   const messages = await bluebird.map(messageIds, async messageId => {
     const msg = JSON.parse(await redis.get(`msg:${messageId}`));
-    Object.assign({}, msg, { hasSeen: lastSeen ? msg.date < lastSeen : false });
+    Object.assign(msg, { hasSeen: lastSeen ? msg.date < lastSeen : false });
     return msg;
   });
 
@@ -147,6 +147,7 @@ const getChats = async userPhoneNumber => {
       await redis.get(`msg:${lastMessageId}`)
     );
     return {
+      chatType,
       chatName,
       chatId,
       lastMessage
