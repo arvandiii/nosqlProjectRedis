@@ -108,7 +108,7 @@ const getMessages = async (userPhoneNumber, chatId) => {
   }
 
   // check konim k aya taraf ozve chat hast ya na
-  const isMember = await redis.sismember(`members:${chatId}`, sender);
+  const isMember = await redis.sismember(`members:${chatId}`, userPhoneNumber);
   if (!isMember) {
     return error("you are not allowed to send message to this chat");
   }
@@ -140,8 +140,9 @@ const getChats = async userPhoneNumber => {
         : rawChatName
             .replace("pv:", "")
             .replace(userPhoneNumber, "")
-            .replace(":", null);
-    const lastMessageId = await redis.zrevrange(`chat:msgs:${chatId}`, 0, 1);
+            .replace(":", "");
+    const [lastMessageId] = await redis.zrevrange(`chat:msgs:${chatId}`, 0, 1);
+
     const lastMessage = await JSON.parse(
       await redis.get(`msg:${lastMessageId}`)
     );
