@@ -3,6 +3,7 @@ const uuid = require("uuid/v4");
 const bluebird = require("bluebird");
 
 const redis = new Redis();
+const error = msg => `\x1b[31m${msg}\x1b[0m`;
 
 const sendMessage = async (sender, chatId, text) => {
   const messageId = uuid();
@@ -15,6 +16,18 @@ const sendMessage = async (sender, chatId, text) => {
     id: messageId,
     text
   };
+
+  // check konim k chat vojod dashte bashe
+  const exists = await redis.exists(`chat:msgs:${chatId}`);
+  if (!exists) {
+    return error("chat is not valid");
+  }
+
+  // check konim k aya taraf ozve chat hast ya na
+  const isMember = await redis.sismember(`members:${chatId}`, sender);
+  if (!isMember) {
+    return error("you are not allowed to send message to this chat");
+  }
 
   // ye message sakhtim
   await redis.set(`msg:${messageId}`, JSON.stringify(message));
