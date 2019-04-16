@@ -132,7 +132,15 @@ const getMessages = async (userPhoneNumber, chatId) => {
 const getChats = async userPhoneNumber => {
   const chatIds = await redis.zrevrange(`user:chats:${userPhoneNumber}`, 0, -1);
   const chats = await bluebird.map(chatIds, async chatId => {
-    const chatName = await redis.get(`chat:info:${chatId}`);
+    const rawChatName = await redis.get(`chat:info:${chatId}`);
+    const chatType = rawChatName.split(":")[0];
+    const chatName =
+      chatType === "gp"
+        ? rawChatName.replace("gp:", "")
+        : rawChatName
+            .replace("pv:", "")
+            .replace(userPhoneNumber, "")
+            .replace(":", null);
     const lastMessageId = await redis.zrevrange(`chat:msgs:${chatId}`, 0, 1);
     const lastMessage = await JSON.parse(
       await redis.get(`msg:${lastMessageId}`)
@@ -143,7 +151,6 @@ const getChats = async userPhoneNumber => {
       lastMessage
     };
   });
-  console.log("inja", chatIds, chats);
   return JSON.stringify(chats, null, 4);
 };
 
