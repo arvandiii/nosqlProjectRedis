@@ -1,6 +1,7 @@
 const Redis = require("ioredis");
 const uuid = require("uuid/v4");
 const bluebird = require("bluebird");
+const md5 = require("md5");
 
 const redis = new Redis();
 const error = msg => `\x1b[31m${msg}\x1b[0m`;
@@ -190,7 +191,21 @@ const removeContact = async (userPhoneNumber, phoneNumber) => {
   return "contact removed";
 };
 
+const register = async (userPhoneNumber, pass) => {
+  await redis.set(`pass:${userPhoneNumber}`, md5(pass));
+  console.log("inja", `pass:${userPhoneNumber}`, md5(pass));
+  return "registerd";
+};
+
+const checkPass = async (userPhoneNumber, pass) => {
+  const passHash = await redis.get(`pass:${userPhoneNumber}`);
+  console.log(passHash, pass);
+  return passHash == md5(pass);
+};
+
 module.exports = {
+  register,
+  checkPass,
   join,
   sendMessage,
   getMessages,

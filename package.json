@@ -6,6 +6,7 @@
   "dependencies": {
     "bluebird": "^3.5.4",
     "ioredis": "^4.9.0",
+    "md5": "^2.2.1",
     "table": "^5.2.3",
     "uuid": "^3.3.2",
     "vorpal": "^1.12.0"

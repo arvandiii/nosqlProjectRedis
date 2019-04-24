@@ -4,27 +4,36 @@ const { table } = require("table");
 
 let userPhoneNumber = null;
 
-const data = [["0A", "0B", "0C"], ["1A", "1B", "1C"], ["2A", "2B", "2C"]];
-const output = table(data);
-
 const validatePhoneNumber = phoneNumber =>
   typeof phoneNumber === "string" && phoneNumber.length === 4;
+
+vorpal.command("register <phone> <pass>").action((args, callback) => {
+  const { phone, pass } = args;
+  api.register(phone, pass).then(callback);
+});
 
 vorpal
   .command("login")
   .option("-n, --phoneNumber <phoneNumber>")
+  .option("-p, --pass <pass>")
   .types({ string: ["n", "phoneNumber"] })
   .action((args, callback) => {
     const {
-      options: { phoneNumber }
+      options: { phoneNumber, pass }
     } = args;
+    console.log("pass", pass);
     if (!validatePhoneNumber(phoneNumber)) {
       return callback("phone is not valid");
     }
-    vorpal.delimiter(`app:${phoneNumber}$`);
-    vorpal.ui.refresh();
-    userPhoneNumber = phoneNumber;
-    return callback("login successful");
+    api.checkPass(phoneNumber, pass).then(check => {
+      if (!check) {
+        return callback("pass invalid");
+      }
+      vorpal.delimiter(`app:${phoneNumber}$`);
+      vorpal.ui.refresh();
+      userPhoneNumber = phoneNumber;
+      return callback("login successful");
+    });
   });
 
 vorpal.command("sendMessage <chatId> <text>").action((args, callback) => {
